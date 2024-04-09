@@ -1,0 +1,225 @@
+substitutions:
+  name: oras-ble-faucet
+  friendly_name: oras-ble-faucet
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+  project:
+    name: esphome.bluetooth-proxy
+    version: "1.0"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+api:
+  encryption:
+    key: !secret esphome_api_key
+
+# Enable logging
+logger:
+  level: DEBUG
+
+ota:
+  # See: https://esphome.io/components/ota.html
+  password: !secret esphome_ota_password
+
+dashboard_import:
+  package_import_url: github://esphome/firmware/bluetooth-proxy/esp32-generic.yaml@main
+
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 1100ms
+    window: 1100ms
+    active: true
+        
+bluetooth_proxy:
+  active: true
+    
+wifi:
+  ssid: !secret wifi_iot_ssid
+  password: !secret wifi_iot_password
+  domain: '.iot.rg47c.lan'
+  use_address: bathroom-bluetooth-proxy.iot.rg47c.lan
+
+time:
+  - platform: homeassistant
+    id: esptime
+    on_time:
+    # Enable BLE client every 20 minutes - to get updated values...  
+	  # Once per hour could be sufficient in order to minimize battery usage for the BLE communication
+      - seconds: 0
+        minutes: 10,30,50
+        then:
+          - lambda: |-
+              id(ble_oras).turn_on();
+                      
+button:
+  - platform: restart
+    name: "Restart"    
+
+switch:
+  - platform: ble_client
+    ble_client_id: Oras6150FZ_Bathroom
+    name: "Enable Oras BLE Client"
+    restore_mode: RESTORE_DEFAULT_OFF
+    id: ble_oras
+    on_turn_on:
+      lambda: |-
+        id(nAllRead).publish_state(0);
+  
+ble_client:
+  - mac_address: EC:E0:26:98:92:79 
+    id: Oras6150FZ_Bathroom
+    on_connect: 
+      then:
+        - lambda: |-
+            ESP_LOGI("", "BLE CONNECTED");
+        - delay: 1ms
+        - lambda: |-
+            id(faucetBatteryState).update();
+            id(faucetTripValveCount).update();
+            id(faucetTotalValveCount).update();
+
+number:
+    # Number template used a bit-pattern to find out if all capabilities uuids have been read
+  - platform: template
+    id: nAllRead
+    internal: True
+    max_value: 7
+    min_value: 0
+    step: 1
+    optimistic: True
+    restore_value: True
+    initial_value: 0
+
+sensor:
+  - platform: uptime
+    name: Uptime Sensor
+  - platform: template
+    name: "oras_TotalWaterConsumption"
+    id: oras_totConsumption
+    icon: 'mdi:faucet'
+    unit_of_measurement: "L"
+    device_class: water
+    state_class: "total_increasing"
+    update_interval: never
+    filters:
+      - filter_out: nan
+  - platform: template
+    name: "oras_TotalWaterConsumptionM3"
+    id: oras_totConsumption_m3
+    icon: 'mdi:faucet'
+    unit_of_measurement: "m³"
+    accuracy_decimals: 3
+    device_class: water
+    state_class: "total_increasing"
+    update_interval: never
+    filters:
+      - filter_out: nan
+  - platform: template
+    name: oras_BatteryVoltage
+    id: battery_voltage
+    icon: 'mdi:battery'
+    unit_of_measurement: "V"
+    accuracy_decimals: 2
+    device_class: voltage
+    update_interval: never
+    filters:
+      - filter_out: nan
+  - platform: ble_client
+    id: faucetBatteryState
+    type: characteristic
+    ble_client_id: Oras6150FZ_Bathroom
+    name: "oras_BatteryStatus"
+    icon: 'mdi:battery'
+    unit_of_measurement: "%"
+    device_class: battery
+    filters:
+      - filter_out: nan
+    service_uuid: '2BE32DB1-5F6B-4CBD-8803-38D6DFB16490'
+    characteristic_uuid: '2BE32DB1-5F6B-4CBD-8843-8D6DFB164900'
+    notify: false
+    update_interval: never
+    lambda: |-
+      uint16_t batteryVoltage = (uint8_t)x[4];
+      uint8_t batteryPct = (uint8_t)x[6];
+      batteryVoltage += ( x[5]<<8);
+      ESP_LOGD("", "BatteryVoltage %f", (float)(batteryVoltage)/100);
+      ESP_LOGD("", "BatteryPercentage %d", batteryPct);
+      id(battery_voltage).publish_state((float)(batteryVoltage)/100);
+      uint8_t scanStatus = (uint8_t) id(nAllRead).state;
+      scanStatus |= 1;
+      id(nAllRead).publish_state(scanStatus);
+      if(scanStatus == 7) {
+        id(ble_oras).turn_off();
+      }
+      return((float)batteryPct);
+
+
+  - platform: ble_client
+    id: faucetTripValveCount
+    type: characteristic
+    ble_client_id: Oras6150FZ_Bathroom
+    name: "oras_ValveCounterTrip"
+    service_uuid: "2BE32DB1-5F6B-4CBD-8803-38D6DFB16490"
+    characteristic_uuid: "2BE32DB1-5F6B-4CBD-8873-8D6DFB164900"
+    state_class: total
+    notify: false
+    update_interval: never
+    lambda: |-
+      unsigned long int totConsumption = (uint8_t) x[0];
+      unsigned long int openingsTripCounter = (uint8_t) x[4];
+
+      totConsumption += ( x[1]<<8);
+      totConsumption += ( x[2]<<16);
+      totConsumption += ( x[3]<<24);
+
+      openingsTripCounter += ( x[5]<<8);
+      openingsTripCounter += ( x[6]<<8);
+      openingsTripCounter += ( x[7]<<8);
+
+      id(oras_totConsumption).publish_state(totConsumption);
+      id(oras_totConsumption_m3).publish_state((float)totConsumption/(float)1000);
+      ESP_LOGD("", "Total water consumption %ld", totConsumption);
+      ESP_LOGD("", "Trip valve openings %ld", openingsTripCounter);
+      uint8_t scanStatus = (uint8_t) id(nAllRead).state;
+      scanStatus |= 2;
+      id(nAllRead).publish_state(scanStatus);
+      if(scanStatus == 7) {
+        id(ble_oras).turn_off();
+      }
+      return (float)openingsTripCounter;
+    icon: 'mdi:faucet'
+    filters:
+      - filter_out: nan
+
+  - platform: ble_client
+    id: faucetTotalValveCount
+    type: characteristic
+    ble_client_id: Oras6150FZ_Bathroom
+    name: "oras_ValveCounterTotal"
+    service_uuid: "2BE32DB1-5F6B-4CBD-8803-38D6DFB16490"
+    characteristic_uuid: "2BE32DB1-5F6B-4CBD-8863-8D6DFB164900"
+    update_interval: never
+    state_class: total
+    notify: false
+    filters:
+      - filter_out: nan
+    lambda: |-
+      unsigned long int cntValveTotal = (uint8_t) x[0];
+      cntValveTotal += ( x[1]<<8);
+      cntValveTotal += ( x[2]<<16);
+      cntValveTotal += ( x[3]<<24);
+      uint8_t scanStatus = (uint8_t) id(nAllRead).state;
+      scanStatus |= 4;
+      id(nAllRead).publish_state(scanStatus);
+      if(scanStatus == 7) {
+        id(ble_oras).turn_off();
+      }
+      return(cntValveTotal);
+
+
