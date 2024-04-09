@@ -43,7 +43,7 @@ wifi:
   ssid: !secret wifi_iot_ssid
   password: !secret wifi_iot_password
   domain: '.iot.rg47c.lan'
-  use_address: bathroom-bluetooth-proxy.iot.rg47c.lan
+  use_address: oras-ble-faucet.iot.rg47c.lan
 
 time:
   - platform: homeassistant
