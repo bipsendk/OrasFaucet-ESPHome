@@ -193,7 +193,7 @@ sensor:
         id(ble_oras).turn_off();
       }
       return (float)openingsTripCounter;
-    icon: 'mdi:faucet'
+    icon: 'mdi:valve'
     filters:
       - filter_out: nan
 
@@ -207,6 +207,7 @@ sensor:
     update_interval: never
     state_class: total
     notify: false
+    icon: 'mdi:valve'
     filters:
       - filter_out: nan
     lambda: |-
