@@ -49,10 +49,10 @@ time:
   - platform: homeassistant
     id: esptime
     on_time:
-    # Enable BLE client every 20 minutes - to get updated values...  
-    # Once per hour could be sufficient in order to minimize battery usage for the BLE communication
+    # Enable BLE client on xx:55 of the hour to get updated values...  
+    # This should give sufficient time to connect and retrieve data before the end of the hour
       - seconds: 0
-        minutes: 10,30,50
+        minutes: 55
         then:
           - lambda: |-
               id(ble_oras).turn_on();
