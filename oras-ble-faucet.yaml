@@ -50,7 +50,7 @@ time:
     id: esptime
     on_time:
     # Enable BLE client every 20 minutes - to get updated values...  
-	  # Once per hour could be sufficient in order to minimize battery usage for the BLE communication
+    # Once per hour could be sufficient in order to minimize battery usage for the BLE communication
       - seconds: 0
         minutes: 10,30,50
         then:
