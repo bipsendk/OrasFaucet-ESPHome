@@ -5,5 +5,5 @@ You will have to modify the MAC address of the faucet in the ble_client section.
 
 Please observe: The MAC may change on battery replacement
 
-Also, the service and capabilities uuid's might be different/randomly generated. I do not have multiple faucets, som I have not been able to verify it.
+Also, the service and capabilities uuid's might be different/randomly generated. I do not have multiple faucets, so I have not been able to verify it.
 
