@@ -85,7 +85,7 @@ ble_client:
             id(faucetTotalValveCount).update();
 
 number:
-    # Number template used a bit-pattern to find out if all capabilities uuids have been read
+    # Number template used as bit-pattern to find out if all capability uuids have been read
   - platform: template
     id: nAllRead
     internal: True
